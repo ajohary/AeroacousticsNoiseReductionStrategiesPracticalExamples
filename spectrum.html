@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,27 +93,27 @@ Compact-source model — Rozenberg et al. (2012), observer at 90°
 
 <div class="slider-group">
     <div class="slider-label">
-        <span>Exponent <i>A</i>₁ = 3.7 + 1.5β<sub>c</sub></span>
-        <span class="slider-value" id="valA1">1.00</span>
+        <span>Chordwise distance from TE <i>x</i>/<i>c</i></span>
+        <span class="slider-value" id="valXc">1.00</span>
     </div>
-    <input type="range" id="sliderA1" min="0.5" max="2.0" step="0.05" value="1.0">
+    <input type="range" id="sliderXc" min="0.05" max="1.0" step="0.01" value="1.0">
 </div>
 
 </div>
 
 <script>
 /* ------------------------------------------------------
-   FIXED MODEL PARAMETERS (Boundary-layer quantities)
+   FIXED MODEL PARAMETERS
 ------------------------------------------------------ */
-const deltaStar = 0.002;   // displacement thickness δ* [m]
-const Delta     = 8.0;     // Zagarola–Smits parameter δ / δ*
-const RT        = 1.0;     // time-scale ratio
+const deltaStar = 0.002;      // displacement thickness δ* [m]
+const DeltaTE   = 8.0;        // Δ at trailing edge
+const RT        = 1.0;
+const A1        = 1.0;        // fixed exponent
 
-/* A2 definition from Rozenberg et al. */
 const A2 = Math.min(3.19 / Math.sqrt(RT), 1.0);
 
 /* ------------------------------------------------------
-   Frequency array (angular frequency ω)
+   Frequency array
 ------------------------------------------------------ */
 function logspace(start, stop, n) {
     const ls = Math.log10(start);
@@ -127,11 +126,17 @@ function logspace(start, stop, n) {
 const omega = logspace(1, 1e4, 500);
 
 /* ------------------------------------------------------
-   Wall-pressure spectrum φ_pp(ω)
+   Boundary-layer growth model
 ------------------------------------------------------ */
-function wallPressureSpectrum(omega, U, F1, A1) {
+function DeltaFromChord(xc) {
+    return DeltaTE * Math.pow(xc, 0.75);
+}
 
-    /* Strouhal number: ω̃ = ω δ* / U */
+/* ------------------------------------------------------
+   Wall-pressure spectrum
+------------------------------------------------------ */
+function wallPressureSpectrum(omega, U, F1, Delta) {
+
     const omegaTilde = omega * deltaStar / U;
 
     const numerator =
@@ -147,8 +152,9 @@ function wallPressureSpectrum(omega, U, F1, A1) {
     return numerator / denominator;
 }
 
-function computeSpectrum(U, F1, A1) {
-    return omega.map(w => wallPressureSpectrum(w, U, F1, A1));
+function computeSpectrum(U, F1, xc) {
+    const Delta = DeltaFromChord(xc);
+    return omega.map(w => wallPressureSpectrum(w, U, F1, Delta));
 }
 
 /* ------------------------------------------------------
@@ -161,7 +167,7 @@ const spectrumChart = new Chart(ctx, {
     data: {
         labels: omega,
         datasets: [{
-            label: 'φₚₚ(ω) U / (τ²ₘₐₓ δ*)',
+            label: 'φₚₚ(ω)',
             data: computeSpectrum(30, 1.0, 1.0),
             borderColor: '#0055aa',
             borderWidth: 2,
@@ -191,20 +197,23 @@ const spectrumChart = new Chart(ctx, {
 function updatePlot() {
     const U  = parseFloat(sliderU.value);
     const F1 = parseFloat(sliderF1.value);
-    const A1 = parseFloat(sliderA1.value);
+    const xc = parseFloat(sliderXc.value);
 
     valU.textContent  = U.toFixed(0);
     valF1.textContent = F1.toFixed(2);
-    valA1.textContent = A1.toFixed(2);
+    valXc.textContent = xc.toFixed(2);
 
-    spectrumChart.data.datasets[0].data = computeSpectrum(U, F1, A1);
+    spectrumChart.data.datasets[0].data =
+        computeSpectrum(U, F1, xc);
+
     spectrumChart.update('none');
 }
 
 sliderU.oninput  = updatePlot;
 sliderF1.oninput = updatePlot;
-sliderA1.oninput = updatePlot;
+sliderXc.oninput = updatePlot;
 </script>
 
 </body>
 </html>
+
