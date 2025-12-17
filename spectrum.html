@@ -59,6 +59,21 @@ h1 {
 input[type="range"] {
     width: 100%;
 }
+
+#downloadBtn {
+    margin-top: 25px;
+    padding: 12px 18px;
+    font-size: 14px;
+    background: #0055aa;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#downloadBtn:hover {
+    background: #003f80;
+}
 </style>
 </head>
 
@@ -99,16 +114,18 @@ Compact-source model — Rozenberg et al. (2012), observer at 90°
     <input type="range" id="sliderXc" min="0.05" max="1.0" step="0.01" value="1.0">
 </div>
 
+<button id="downloadBtn">⬇ Download Φ<sub>pp</sub>(ω)</button>
+
 </div>
 
 <script>
 /* ------------------------------------------------------
    FIXED MODEL PARAMETERS
 ------------------------------------------------------ */
-const deltaStar = 0.002;      // displacement thickness δ* [m]
-const DeltaTE   = 8.0;        // Δ at trailing edge
+const deltaStar = 0.002;
+const DeltaTE   = 8.0;
 const RT        = 1.0;
-const A1        = 1.0;        // fixed exponent
+const A1        = 1.0;
 
 const A2 = Math.min(3.19 / Math.sqrt(RT), 1.0);
 
@@ -126,7 +143,7 @@ function logspace(start, stop, n) {
 const omega = logspace(1, 1e4, 500);
 
 /* ------------------------------------------------------
-   Boundary-layer growth model
+   Boundary-layer growth
 ------------------------------------------------------ */
 function DeltaFromChord(xc) {
     return DeltaTE * Math.pow(xc, 0.75);
@@ -158,7 +175,7 @@ function computeSpectrum(U, F1, xc) {
 }
 
 /* ------------------------------------------------------
-   Chart.js setup
+   Chart.js
 ------------------------------------------------------ */
 const ctx = document.getElementById('spectrumChart').getContext('2d');
 
@@ -167,7 +184,6 @@ const spectrumChart = new Chart(ctx, {
     data: {
         labels: omega,
         datasets: [{
-            label: 'φₚₚ(ω)',
             data: computeSpectrum(30, 1.0, 1.0),
             borderColor: '#0055aa',
             borderWidth: 2,
@@ -178,26 +194,20 @@ const spectrumChart = new Chart(ctx, {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-            x: {
-                type: 'logarithmic',
-                title: { display: true, text: 'Angular frequency ω' }
-            },
-            y: {
-                type: 'logarithmic',
-                title: { display: true, text: 'Normalised wall-pressure spectrum' }
-            }
+            x: { type: 'logarithmic', title: { display: true, text: 'Angular frequency ω' }},
+            y: { type: 'logarithmic', title: { display: true, text: 'Normalised wall-pressure spectrum Φₚₚ(ω)' }}
         },
         plugins: { legend: { display: false } }
     }
 });
 
 /* ------------------------------------------------------
-   Slider interaction
+   Slider update
 ------------------------------------------------------ */
 function updatePlot() {
-    const U  = parseFloat(sliderU.value);
-    const F1 = parseFloat(sliderF1.value);
-    const xc = parseFloat(sliderXc.value);
+    const U  = +sliderU.value;
+    const F1 = +sliderF1.value;
+    const xc = +sliderXc.value;
 
     valU.textContent  = U.toFixed(0);
     valF1.textContent = F1.toFixed(2);
@@ -212,6 +222,40 @@ function updatePlot() {
 sliderU.oninput  = updatePlot;
 sliderF1.oninput = updatePlot;
 sliderXc.oninput = updatePlot;
+
+/* ------------------------------------------------------
+   Download Φpp
+------------------------------------------------------ */
+downloadBtn.onclick = () => {
+
+    const U  = +sliderU.value;
+    const F1 = +sliderF1.value;
+    const xc = +sliderXc.value;
+
+    const phi = computeSpectrum(U, F1, xc);
+
+    let csv = "";
+    csv += "# Wall-pressure spectrum Φ_pp(ω)\n";
+    csv += "# Rozenberg et al. (2012)\n";
+    csv += `# U = ${U} m/s\n`;
+    csv += `# F1 = ${F1}\n`;
+    csv += `# x/c = ${xc}\n`;
+    csv += "# omega, Phi_pp\n";
+
+    for (let i = 0; i < omega.length; i++) {
+        csv += `${omega[i]}, ${phi[i]}\n`;
+    }
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Phi_pp_spectrum.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
+};
 </script>
 
 </body>
