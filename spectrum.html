@@ -1,236 +1,210 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wall-Pressure Spectrum</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1000px;
-            margin: 20px auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        #chartContainer {
-            position: relative;
-            height: 400px;
-            margin-bottom: 30px;
-        }
-        .slider-group {
-            margin: 15px 0;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 4px;
-        }
-        .slider-label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 14px;
-            color: #333;
-        }
-        .slider-value {
-            font-weight: bold;
-            color: #0066cc;
-        }
-        input[type="range"] {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: #ddd;
-            outline: none;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #0066cc;
-            cursor: pointer;
-        }
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #0066cc;
-            cursor: pointer;
-            border: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Wall-Pressure Spectrum — Rozenberg et al. (2012)</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    margin: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 25px;
+}
+
+#chartContainer {
+    height: 420px;
+}
+
+.slider-group {
+    margin-top: 18px;
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 5px;
+}
+
+.slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+}
+
+.slider-value {
+    font-weight: bold;
+    color: #0055aa;
+}
+
+input[type="range"] {
+    width: 100%;
+}
+</style>
 </head>
+
 <body>
-    <div class="container">
-        <h1>Wind-Turbine Wall-Pressure Spectrum</h1>
-        <div class="subtitle">Rozenberg et al. (2012) Model - Cases 1–4</div>
-        
-        <div id="chartContainer">
-            <canvas id="spectrumChart"></canvas>
-        </div>
+<div class="container">
 
-        <div class="slider-group">
-            <div class="slider-label">
-                <span> Incoming flow speed <i>U</i> [m/s]</span>
-                <span class="slider-value" id="valueU">30.0</span>
-            </div>
-            <input type="range" id="sliderU" min="10" max="80" step="0.5" value="30">
-        </div>
+<h1>Wall-Pressure Spectrum</h1>
+<div class="subtitle">
+Compact-source model — Rozenberg et al. (2012), observer at 90°
+</div>
 
-        <div class="slider-group">
-            <div class="slider-label">
-                <span> Chordwise position <i>x/c</i></span>
-                <span class="slider-value" id="valueXC">1.00</span>
-            </div>
-            <input type="range" id="sliderXC" min="0.2" max="1.0" step="0.01" value="1.0">
-        </div>
+<div id="chartContainer">
+<canvas id="spectrumChart"></canvas>
+</div>
 
-        <div class="slider-group">
-            <div class="slider-label">
-                <span> Pressure-gradient parameter <i>F</i>₁</span>
-                <span class="slider-value" id="valueF1">1.00</span>
-            </div>
-            <input type="range" id="sliderF1" min="0.5" max="2.5" step="0.05" value="1.0">
-        </div>
-
-        <div class="slider-group">
-            <div class="slider-label">
-                <span> Exponent <i>A</i>₁</span>
-                <span class="slider-value" id="valueA1">1.00</span>
-            </div>
-            <input type="range" id="sliderA1" min="0.5" max="1.8" step="0.05" value="1.0">
-        </div>
+<!-- Sliders -->
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Flow velocity <i>U</i> [m/s]</span>
+        <span class="slider-value" id="valU">30</span>
     </div>
+    <input type="range" id="sliderU" min="10" max="80" step="1" value="30">
+</div>
 
-    <script>
-        // Reference parameters
-        const Delta_TE = 0.05;
-        const A20 = 1.0;
-        const RT0 = 1.0;
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Pressure-gradient term <i>F</i>₁</span>
+        <span class="slider-value" id="valF1">1.00</span>
+    </div>
+    <input type="range" id="sliderF1" min="0.5" max="2.5" step="0.05" value="1.0">
+</div>
 
-        // Generate logarithmically spaced frequency array
-        function logspace(start, stop, num) {
-            const logStart = Math.log10(start);
-            const logStop = Math.log10(stop);
-            const step = (logStop - logStart) / (num - 1);
-            return Array.from({length: num}, (_, i) => Math.pow(10, logStart + i * step));
-        }
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Exponent <i>A</i>₁ = 3.7 + 1.5β<sub>c</sub></span>
+        <span class="slider-value" id="valA1">1.00</span>
+    </div>
+    <input type="range" id="sliderA1" min="0.5" max="2.0" step="0.05" value="1.0">
+</div>
 
-        const omega = logspace(0.1, 100, 500);
+</div>
 
-        // Wall-pressure spectrum model
-        function wallPressureSpectrum(omega, U, x_over_c, F1, A1) {
-            const Delta = Delta_TE * Math.pow(x_over_c, 0.75);
-            const omega_tilde = omega / U;
-            
-            const numerator = (
-                2.82 * Math.pow(Delta, 2) *
-                Math.pow(6.13 * Math.pow(Delta, -0.75) + F1, A1) *
-                (4.2 * (Math.PI / Delta) + 1.0) *
-                Math.pow(omega_tilde, 2)
-            );
-            
-            const denominator = (
-                Math.pow(4.76 * Math.pow(omega_tilde, 0.75) + F1, A1) +
-                Math.pow(8.8 * Math.pow(RT0, -0.57) * omega_tilde, A20)
-            );
-            
-            return numerator / denominator;
-        }
+<script>
+/* ------------------------------------------------------
+   FIXED MODEL PARAMETERS (Boundary-layer quantities)
+------------------------------------------------------ */
+const deltaStar = 0.002;   // displacement thickness δ* [m]
+const Delta     = 8.0;     // Zagarola–Smits parameter δ / δ*
+const RT        = 1.0;     // time-scale ratio
 
-        // Calculate spectrum for all frequencies
-        function calculateSpectrum(U, x_over_c, F1, A1) {
-            return omega.map(w => wallPressureSpectrum(w, U, x_over_c, F1, A1));
-        }
+/* A2 definition from Rozenberg et al. */
+const A2 = Math.min(3.19 / Math.sqrt(RT), 1.0);
 
-        // Chart setup
-        const ctx = document.getElementById('spectrumChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: omega,
-                datasets: [{
-                    label: 'φₚₚ(ω)',
-                    data: calculateSpectrum(30, 1.0, 1.0, 1.0),
-                    borderColor: '#0066cc',
-                    borderWidth: 2,
-                    fill: false,
-                    pointRadius: 0
-                }]
+/* ------------------------------------------------------
+   Frequency array (angular frequency ω)
+------------------------------------------------------ */
+function logspace(start, stop, n) {
+    const ls = Math.log10(start);
+    const le = Math.log10(stop);
+    return Array.from({length: n}, (_, i) =>
+        Math.pow(10, ls + (le - ls) * i / (n - 1))
+    );
+}
+
+const omega = logspace(1, 1e4, 500);
+
+/* ------------------------------------------------------
+   Wall-pressure spectrum φ_pp(ω)
+------------------------------------------------------ */
+function wallPressureSpectrum(omega, U, F1, A1) {
+
+    /* Strouhal number: ω̃ = ω δ* / U */
+    const omegaTilde = omega * deltaStar / U;
+
+    const numerator =
+        2.82 * Math.pow(Delta, 2) *
+        Math.pow(6.13 * Math.pow(Delta, -0.75) + F1, A1) *
+        (4.2 * (Math.PI / Delta) + 1.0) *
+        Math.pow(omegaTilde, 2);
+
+    const denominator =
+        Math.pow(4.76 * Math.pow(omegaTilde, 0.75) + F1, A1) +
+        Math.pow(8.8 * Math.pow(RT, -0.57) * omegaTilde, A2);
+
+    return numerator / denominator;
+}
+
+function computeSpectrum(U, F1, A1) {
+    return omega.map(w => wallPressureSpectrum(w, U, F1, A1));
+}
+
+/* ------------------------------------------------------
+   Chart.js setup
+------------------------------------------------------ */
+const ctx = document.getElementById('spectrumChart').getContext('2d');
+
+const spectrumChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: omega,
+        datasets: [{
+            label: 'φₚₚ(ω) U / (τ²ₘₐₓ δ*)',
+            data: computeSpectrum(30, 1.0, 1.0),
+            borderColor: '#0055aa',
+            borderWidth: 2,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                type: 'logarithmic',
+                title: { display: true, text: 'Angular frequency ω' }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'logarithmic',
-                        title: {
-                            display: true,
-                            text: 'Angular frequency ω'
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    },
-                    y: {
-                        type: 'logarithmic',
-                        title: {
-                            display: true,
-                            text: 'φₚₚ(ω) U / (τ²ₘₐₓ δ*)'
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
+            y: {
+                type: 'logarithmic',
+                title: { display: true, text: 'Normalised wall-pressure spectrum' }
             }
-        });
+        },
+        plugins: { legend: { display: false } }
+    }
+});
 
-        // Update function
-        function updateChart() {
-            const U = parseFloat(document.getElementById('sliderU').value);
-            const xc = parseFloat(document.getElementById('sliderXC').value);
-            const F1 = parseFloat(document.getElementById('sliderF1').value);
-            const A1 = parseFloat(document.getElementById('sliderA1').value);
+/* ------------------------------------------------------
+   Slider interaction
+------------------------------------------------------ */
+function updatePlot() {
+    const U  = parseFloat(sliderU.value);
+    const F1 = parseFloat(sliderF1.value);
+    const A1 = parseFloat(sliderA1.value);
 
-            document.getElementById('valueU').textContent = U.toFixed(1);
-            document.getElementById('valueXC').textContent = xc.toFixed(2);
-            document.getElementById('valueF1').textContent = F1.toFixed(2);
-            document.getElementById('valueA1').textContent = A1.toFixed(2);
+    valU.textContent  = U.toFixed(0);
+    valF1.textContent = F1.toFixed(2);
+    valA1.textContent = A1.toFixed(2);
 
-            chart.data.datasets[0].data = calculateSpectrum(U, xc, F1, A1);
-            chart.update('none'); // 'none' mode for faster updates
-        }
+    spectrumChart.data.datasets[0].data = computeSpectrum(U, F1, A1);
+    spectrumChart.update('none');
+}
 
-        // Attach event listeners
-        document.getElementById('sliderU').addEventListener('input', updateChart);
-        document.getElementById('sliderXC').addEventListener('input', updateChart);
-        document.getElementById('sliderF1').addEventListener('input', updateChart);
-        document.getElementById('sliderA1').addEventListener('input', updateChart);
-    </script>
+sliderU.oninput  = updatePlot;
+sliderF1.oninput = updatePlot;
+sliderA1.oninput = updatePlot;
+</script>
+
 </body>
-
 </html>
