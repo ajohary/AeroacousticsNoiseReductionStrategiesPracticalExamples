@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trailing-Edge Noise – SPL Prediction</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1100px;
+    margin: 20px auto;
+    background: #f5f5f5;
+}
+.container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+}
+h1 {
+    text-align: center;
+}
+.subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 20px;
+}
+#chartContainer {
+    height: 420px;
+}
+.slider-group {
+    margin: 12px 0;
+}
+.slider-label {
+    display: flex;
+    justify-content: space-between;
+}
+button {
+    margin-top: 15px;
+    padding: 10px 15px;
+    font-size: 14px;
+    cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>Trailing-Edge Noise SPL Prediction</h1>
+<div class="subtitle">
+Wall-pressure → radiated sound using Amiet-type formulation
+</div>
+
+<div id="chartContainer">
+<canvas id="splChart"></canvas>
+</div>
+
+<!-- Sliders -->
+<div class="slider-group">
+<div class="slider-label">
+<span>Flow velocity U [m/s]</span>
+<span id="valU">30</span>
+</div>
+<input type="range" id="U" min="10" max="80" step="1" value="30">
+</div>
+
+<div class="slider-group">
+<div class="slider-label">
+<span>Chord length c [m]</span>
+<span id="valc">0.5</span>
+</div>
+<input type="range" id="c" min="0.2" max="1.2" step="0.05" value="0.5">
+</div>
+
+<div class="slider-group">
+<div class="slider-label">
+<span>Observer distance S₀ [m]</span>
+<span id="valS0">50</span>
+</div>
+<input type="range" id="S0" min="10" max="200" step="5" value="50">
+</div>
+
+<div class="slider-group">
+<div class="slider-label">
+<span>Span L [m]</span>
+<span id="valL">1.0</span>
+</div>
+<input type="range" id="L" min="0.3" max="3.0" step="0.1" value="1.0">
+</div>
+
+<div class="slider-group">
+<div class="slider-label">
+<span>Chordwise position x₃ [m]</span>
+<span id="valx3">0.5</span>
+</div>
+<input type="range" id="x3" min="0.05" max="1.0" step="0.05" value="0.5">
+</div>
+
+<button onclick="downloadCSV()">Download SPL spectrum (CSV)</button>
+
+</div>
+
+<script>
+/* ---------- constants ---------- */
+const c0 = 343;               // speed of sound [m/s]
+const rho0 = 1.225;
+const pref = 20e-6;
+
+/* ---------- frequency array ---------- */
+function logspace(f1, f2, N) {
+    const a = Math.log10(f1);
+    const b = Math.log10(f2);
+    return Array.from({length: N}, (_, i) =>
+        Math.pow(10, a + (b - a) * i / (N - 1)));
+}
+
+const freq = logspace(50, 5000, 300);
+const omega = freq.map(f => 2 * Math.PI * f);
+
+/* ---------- wall-pressure spectrum Φpp (normalized example) ---------- */
+function Phi_pp(omega, U) {
+    const omega_t = omega / U;
+    return Math.pow(omega_t, 2) / (1 + Math.pow(omega_t, 2.5));
+}
+
+/* ---------- spanwise correlation length ℓy ---------- */
+function ell_y(omega, L) {
+    const omega_c = 200;
+    return L / (1 + omega / omega_c);
+}
+
+/* ---------- airfoil response function L² ---------- */
+function L2_response(omega, U, c) {
+    const Ky = omega / U;
+    return 1 / (1 + Math.pow(Ky * c, 2));
+}
+
+/* ---------- SPL computation ---------- */
+function computeSPL(params) {
+    const {U, c, S0, L, x3} = params;
+
+    return omega.map((w, i) => {
+
+        const term1 = Math.pow((w * c * x3) /
+            (4 * Math.PI * c0 * Math.pow(S0, 2)), 2);
+
+        const spp =
+            term1 *
+            (L / 2) *
+            Phi_pp(w, U) *
+            ell_y(w, L) *
+            L2_response(w, U, c);
+
+        return 10 * Math.log10(spp / (pref * pref) + 1e-30);
+    });
+}
+
+/* ---------- chart ---------- */
+const ctx = document.getElementById('splChart').getContext('2d');
+const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: freq,
+        datasets: [{
+            label: 'SPL (re 20 µPa)',
+            data: [],
+            borderWidth: 2,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            x: {
+                type: 'logarithmic',
+                title: { display: true, text: 'Frequency [Hz]' }
+            },
+            y: {
+                title: { display: true, text: 'SPL [dB]' }
+            }
+        }
+    }
+});
+
+/* ---------- update ---------- */
+function update() {
+    const params = {
+        U: +U.value,
+        c: +c.value,
+        S0: +S0.value,
+        L: +L.value,
+        x3: +x3.value
+    };
+
+    valU.textContent = params.U;
+    valc.textContent = params.c;
+    valS0.textContent = params.S0;
+    valL.textContent = params.L;
+    valx3.textContent = params.x3;
+
+    chart.data.datasets[0].data = computeSPL(params);
+    chart.update('none');
+}
+
+/* ---------- CSV export ---------- */
+function downloadCSV() {
+    let csv = "Frequency_Hz,SPL_dB\n";
+    chart.data.labels.forEach((f, i) => {
+        csv += `${f},${chart.data.datasets[0].data[i]}\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "SPL_spectrum.csv";
+    a.click();
+}
+
+/* ---------- listeners ---------- */
+['U','c','S0','L','x3'].forEach(id =>
+    document.getElementById(id).addEventListener('input', update)
+);
+
+update();
+</script>
+
+</body>
+</html>
