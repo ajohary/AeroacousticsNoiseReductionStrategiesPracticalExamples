@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Propeller Noise SPL Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    margin: 20px;
+}
+.container {
+    max-width: 1200px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+h1 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+.subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 25px;
+}
+#chartContainer {
+    height: 450px;
+    margin-bottom: 30px;
+}
+.slider-group {
+    margin-top: 18px;
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 5px;
+}
+.slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+}
+.slider-value {
+    font-weight: bold;
+    color: #0055aa;
+}
+input[type="range"] {
+    width: 100%;
+}
+.info-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: #e8f4f8;
+    border-left: 4px solid #0055aa;
+    border-radius: 4px;
+}
+.info-box h3 {
+    margin-top: 0;
+    color: #0055aa;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Propeller Noise SPL Calculator</h1>
+<div class="subtitle">Twin Otter Three-Bladed Propeller - Harmonic Tones</div>
+
+<div id="chartContainer">
+<canvas id="splChart"></canvas>
+</div>
+
+<!-- Sliders -->
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Retarded Radiation Angle θ₁ [degrees]</span>
+        <span class="slider-value" id="valTheta">90</span>
+    </div>
+    <input type="range" id="sliderTheta" min="0" max="180" step="5" value="90">
+</div>
+
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Tip Rotational Mach Number M<sub>t</sub></span>
+        <span class="slider-value" id="valMt">0.50</span>
+    </div>
+    <input type="range" id="sliderMt" min="0.1" max="0.9" step="0.05" value="0.5">
+</div>
+
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Flight Mach Number M<sub>x</sub></span>
+        <span class="slider-value" id="valMx">0.00</span>
+    </div>
+    <input type="range" id="sliderMx" min="0" max="0.3" step="0.01" value="0">
+</div>
+
+<div class="slider-group">
+    <div class="slider-label">
+        <span>Shaft Rotation Frequency [Hz]</span>
+        <span class="slider-value" id="valFreq">230</span>
+    </div>
+    <input type="range" id="sliderFreq" min="100" max="400" step="10" value="230">
+</div>
+
+<div class="info-box">
+    <h3>Configuration</h3>
+    <p><strong>Propeller:</strong> D = 0.21 m, B = 3 blades, r<sub>obs</sub> = 10D = 2.1 m</p>
+    <p><strong>BPF (Blade Passing Frequency):</strong> <span id="bpfValue">690</span> Hz</p>
+    <p><strong>Showing harmonics:</strong> 1×BPF to 5×BPF</p>
+    <p><strong>Angles:</strong> 0° = upstream, 90° = disk plane, 180° = downstream</p>
+</div>
+
+</div>
+
+<script>
+// Fixed parameters
+const D = 0.21;          // Propeller diameter [m]
+const B = 3;             // Number of blades
+const z_eff = 0.8;       // Effective radius
+const c0 = 343.0;        // Sound velocity [m/s]
+const rho0 = 1.225;      // Air density [kg/m³]
+const r_t = D / 2;       // Tip radius
+const r_obs = 10 * D;    // Observer distance
+
+// Bessel function J_n (first kind) - simple approximation for small to moderate arguments
+function besselJ(n, x) {
+    // Use math.js for Bessel functions if available
+    if (typeof math !== 'undefined' && math.besselJ) {
+        return math.besselJ(n, x);
+    }
+    
+    // Fallback: series approximation for small x
+    if (Math.abs(x) < 10) {
+        let sum = 0;
+        let term = Math.pow(x/2, n) / factorial(n);
+        sum += term;
+        
+        for (let k = 1; k < 20; k++) {
+            term *= -Math.pow(x/2, 2) / (k * (k + n));
+            sum += term;
+            if (Math.abs(term) < 1e-10) break;
+        }
+        return sum;
+    }
+    
+    // For larger x, use asymptotic approximation
+    const phase = x - (n * Math.PI / 2) - (Math.PI / 4);
+    return Math.sqrt(2 / (Math.PI * x)) * Math.cos(phase);
+}
+
+function factorial(n) {
+    if (n <= 1) return 1;
+    let result = 1;
+    for (let i = 2; i <= n; i++) result *= i;
+    return result;
+}
+
+function calculateSPL(theta_1, M_t, M_x, f_shaft) {
+    const BPF = B * f_shaft;
+    
+    // Calculate up to 5×BPF
+    const m_max = 5;
+    const frequencies = [];
+    const SPL = [];
+    
+    // Convert angle to radians
+    const theta_1_rad = theta_1 * Math.PI / 180;
+    
+    // Retarded angle
+    const cos_theta = Math.cos(theta_1_rad) * Math.sqrt(1 - M_x**2 * Math.sin(theta_1_rad)**2) +
+                      M_x * Math.sin(theta_1_rad)**2;
+    
+    // Mode parameter
+    const z = r_obs / r_t;
+    const M_r = Math.sqrt(M_x**2 + z**2 * M_t**2);
+    
+    // Noncompactness factor
+    const X = (Math.PI * B * M_t) / (M_r * (1 - M_x * cos_theta));
+    const Psi_L = Math.sin(X) / X;
+    
+    // Estimated thrust and power
+    const V_tip = M_t * c0;
+    const T = 0.5 * rho0 * V_tip**2 * Math.PI * r_t**2 * 0.1;
+    const W = T * V_tip * 0.8;
+    
+    // Calculate for each harmonic
+    for (let m = 1; m <= m_max; m++) {
+        const f = m * BPF;
+        frequencies.push(f);
+        
+        // Bessel function argument
+        const bessel_arg = m * B * z_eff * M_t * Math.sin(theta_1_rad);
+        const J_mB = besselJ(m * B, bessel_arg);
+        
+        // SPL formula
+        const term1 = (538.673 * m * B * M_t * Math.sin(theta_1_rad)) /
+                      (r_obs * D * (1 - M_x * cos_theta));
+        
+        const term2 = (cos_theta / (1 - M_x * cos_theta)) * T -
+                      (550 / (z_eff**2 * M_t**2 * c0)) * W;
+        
+        const term3 = Psi_L * J_mB;
+        
+        const amplitude = Math.abs(term1 * term2 * term3);
+        
+        if (amplitude > 0) {
+            SPL.push(20 * Math.log10(amplitude));
+        } else {
+            SPL.push(-100); // Very low value instead of -Infinity
+        }
+    }
+    
+    return { frequencies, SPL, BPF };
+}
+
+// Chart setup
+const ctx = document.getElementById('splChart').getContext('2d');
+
+const initialData = calculateSPL(90, 0.5, 0, 230);
+
+const splChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: 'SPL [dB re 20 μPa]',
+            data: initialData.frequencies.map((f, i) => ({x: f, y: initialData.SPL[i]})),
+            borderColor: '#0066cc',
+            backgroundColor: '#0066cc',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+        }]
+    },
+    plugins: [{
+        id: 'verticalLines',
+        afterDatasetsDraw: (chart) => {
+            const ctx = chart.ctx;
+            const xAxis = chart.scales.x;
+            const yAxis = chart.scales.y;
+            
+            chart.data.datasets[0].data.forEach((point) => {
+                const x = xAxis.getPixelForValue(point.x);
+                const y = yAxis.getPixelForValue(point.y);
+                const yBottom = yAxis.getPixelForValue(yAxis.min);
+                
+                // Draw vertical line
+                ctx.save();
+                ctx.strokeStyle = '#0066cc';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, yBottom);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.restore();
+            });
+        }
+    }],
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                type: 'linear',
+                title: { display: true, text: 'Frequency [Hz]', font: { size: 14 } },
+                min: 0,
+                max: 5 * initialData.BPF * 1.05
+            },
+            y: {
+                title: { display: true, text: 'SPL [dB re 20 μPa]', font: { size: 14 } }
+            }
+        },
+        plugins: {
+            legend: { display: true, position: 'top' },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `SPL: ${context.parsed.y.toFixed(1)} dB at ${context.parsed.x.toFixed(1)} Hz`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Update function
+function updatePlot() {
+    const theta_1 = parseFloat(sliderTheta.value);
+    const M_t = parseFloat(sliderMt.value);
+    const M_x = parseFloat(sliderMx.value);
+    const f_shaft = parseFloat(sliderFreq.value);
+    
+    // Update display values
+    valTheta.textContent = theta_1.toFixed(0);
+    valMt.textContent = M_t.toFixed(2);
+    valMx.textContent = M_x.toFixed(2);
+    valFreq.textContent = f_shaft.toFixed(0);
+    
+    // Calculate new SPL
+    const result = calculateSPL(theta_1, M_t, M_x, f_shaft);
+    
+    // Update BPF display
+    document.getElementById('bpfValue').textContent = result.BPF.toFixed(1);
+    
+    // Update chart data
+    splChart.data.datasets[0].data = result.frequencies.map((f, i) => ({
+        x: f,
+        y: result.SPL[i]
+    }));
+    splChart.options.scales.x.max = 5 * result.BPF * 1.05;
+    
+    splChart.update('none');
+}
+
+// Attach event listeners
+sliderTheta.oninput = updatePlot;
+sliderMt.oninput = updatePlot;
+sliderMx.oninput = updatePlot;
+sliderFreq.oninput = updatePlot;
+</script>
+</body>
+</html>
