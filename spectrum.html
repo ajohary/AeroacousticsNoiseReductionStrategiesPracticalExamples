@@ -130,7 +130,7 @@ const A1        = 1.0;
 const A2 = Math.min(3.19 / Math.sqrt(RT), 1.0);
 
 /* ------------------------------------------------------
-   Frequency array
+   Frequency array: 1 Hz to 10^5 Hz
 ------------------------------------------------------ */
 function logspace(start, stop, n) {
     const ls = Math.log10(start);
@@ -140,7 +140,9 @@ function logspace(start, stop, n) {
     );
 }
 
-const omega = logspace(1, 1e4, 500);
+// Convert Hz to rad/s: ω = 2πf
+const freq = logspace(1, 1e5, 500);  // 1 Hz to 100,000 Hz
+const omega = freq.map(f => 2 * Math.PI * f);
 
 /* ------------------------------------------------------
    Boundary-layer growth
@@ -182,7 +184,7 @@ const ctx = document.getElementById('spectrumChart').getContext('2d');
 const spectrumChart = new Chart(ctx, {
     type: 'line',
     data: {
-        labels: omega,
+        labels: freq,  // Use frequency (Hz) for x-axis labels
         datasets: [{
             data: computeSpectrum(30, 1.0, 1.0),
             borderColor: '#0055aa',
@@ -194,8 +196,16 @@ const spectrumChart = new Chart(ctx, {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-            x: { type: 'logarithmic', title: { display: true, text: 'Angular frequency ω' }},
-            y: { type: 'logarithmic', title: { display: true, text: 'Normalised wall-pressure spectrum Φₚₚ(ω)' }}
+            x: { 
+                type: 'logarithmic', 
+                min: 1,
+                max: 1e5,
+                title: { display: true, text: 'Frequency f [Hz]' }
+            },
+            y: { 
+                type: 'logarithmic', 
+                title: { display: true, text: 'Normalised wall-pressure spectrum Φₚₚ(ω)' }
+            }
         },
         plugins: { legend: { display: false } }
     }
@@ -260,4 +270,3 @@ downloadBtn.onclick = () => {
 
 </body>
 </html>
-
