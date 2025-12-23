@@ -244,16 +244,10 @@ downloadBtn.onclick = () => {
 
     const phi = computeSpectrum(U, F1, xc);
 
-    let csv = "";
-    csv += "# Wall-pressure spectrum Φ_pp(ω)\n";
-    csv += "# Rozenberg et al. (2012)\n";
-    csv += `# U = ${U} m/s\n`;
-    csv += `# F1 = ${F1}\n`;
-    csv += `# x/c = ${xc}\n`;
-    csv += "# omega, Phi_pp\n";
+    let csv = "omega,Phi_pp\n";
 
     for (let i = 0; i < omega.length; i++) {
-        csv += `${omega[i]}, ${phi[i]}\n`;
+        csv += `${omega[i]},${phi[i]}\n`;
     }
 
     const blob = new Blob([csv], { type: "text/csv" });
