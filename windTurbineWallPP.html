@@ -233,7 +233,7 @@ downloadBtn.onclick = () => {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Phi_pp_spectrum_RT${RT}.csv`;
+    a.download = "Phi_pp_spectrum.csv";
     a.click();
 
     URL.revokeObjectURL(url);
