@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Wall-Pressure Spectrum — Rozenberg et al. (2012)</title>
+<title>Wall-Pressure Spectrum — Equation (5)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
@@ -82,36 +82,20 @@ input[type="range"] {
 
 <h1>Wall-Pressure Spectrum</h1>
 <div class="subtitle">
-Compact-source model — Rozenberg et al. (2012), observer at 90°
+Based on Equation (5) — Reynolds Number Dependence
 </div>
 
 <div id="chartContainer">
 <canvas id="spectrumChart"></canvas>
 </div>
 
-<!-- Sliders -->
+<!-- Slider for RT -->
 <div class="slider-group">
     <div class="slider-label">
-        <span>Flow velocity <i>U</i> [m/s]</span>
-        <span class="slider-value" id="valU">30</span>
+        <span>Reynolds number <i>R<sub>T</sub></i></span>
+        <span class="slider-value" id="valRT">100</span>
     </div>
-    <input type="range" id="sliderU" min="10" max="80" step="1" value="30">
-</div>
-
-<div class="slider-group">
-    <div class="slider-label">
-        <span>Pressure-gradient term <i>F</i>₁</span>
-        <span class="slider-value" id="valF1">1.00</span>
-    </div>
-    <input type="range" id="sliderF1" min="0.5" max="2.5" step="0.05" value="1.0">
-</div>
-
-<div class="slider-group">
-    <div class="slider-label">
-        <span>Chordwise distance from TE <i>x</i>/<i>c</i></span>
-        <span class="slider-value" id="valXc">1.00</span>
-    </div>
-    <input type="range" id="sliderXc" min="0.05" max="1.0" step="0.01" value="1.0">
+    <input type="range" id="sliderRT" min="10" max="2000" step="10" value="100">
 </div>
 
 <button id="downloadBtn">⬇ Download Φ<sub>pp</sub>(ω)</button>
@@ -122,15 +106,12 @@ Compact-source model — Rozenberg et al. (2012), observer at 90°
 /* ------------------------------------------------------
    FIXED MODEL PARAMETERS
 ------------------------------------------------------ */
-const deltaStar = 0.002;
-const DeltaTE   = 8.0;
-const RT        = 1.0;
-const A1        = 1.0;
-
-const A2 = Math.min(3.19 / Math.sqrt(RT), 1.0);
+const tau_w = 1.0;      // Wall shear stress (normalized)
+const delta = 1.0;      // Boundary layer thickness (normalized)
+const U_e = 1.0;        // Edge velocity (normalized)
 
 /* ------------------------------------------------------
-   Frequency array: 1 Hz to 10^5 Hz
+   Non-dimensional frequency array: ωδ/U_e from 10^-3 to 10^4
 ------------------------------------------------------ */
 function logspace(start, stop, n) {
     const ls = Math.log10(start);
@@ -140,40 +121,34 @@ function logspace(start, stop, n) {
     );
 }
 
-// Convert Hz to rad/s: ω = 2πf
-const freq = logspace(1, 1e5, 500);  // 1 Hz to 100,000 Hz
-const omega = freq.map(f => 2 * Math.PI * f);
+const omega_delta_Ue = logspace(1e-3, 1e4, 1000);
 
 /* ------------------------------------------------------
-   Boundary-layer growth
+   Wall-pressure spectrum using Equation (5)
+   
+   Φ(ω)U_e / (τ_w² δ) = 3.0(ωδ/U_e)² / 
+                        { [(ωδ/U_e)^0.75 + 0.5]^3.7 + [(1.1R_T^-0.57)(ωδ/U_e)]^7 }
 ------------------------------------------------------ */
-function DeltaFromChord(xc) {
-    return DeltaTE * Math.pow(xc, 0.75);
-}
-
-/* ------------------------------------------------------
-   Wall-pressure spectrum
------------------------------------------------------- */
-function wallPressureSpectrum(omega, U, F1, Delta) {
-
-    const omegaTilde = omega * deltaStar / U;
-
-    const numerator =
-        2.82 * Math.pow(Delta, 2) *
-        Math.pow(6.13 * Math.pow(Delta, -0.75) + F1, A1) *
-        (4.2 * (Math.PI / Delta) + 1.0) *
-        Math.pow(omegaTilde, 2);
-
-    const denominator =
-        Math.pow(4.76 * Math.pow(omegaTilde, 0.75) + F1, A1) +
-        Math.pow(8.8 * Math.pow(RT, -0.57) * omegaTilde, A2);
-
+function wallPressureSpectrum(omega_delta_Ue, RT) {
+    
+    const omega_norm = omega_delta_Ue;  // ωδ/U_e
+    
+    const numerator = 3.0 * Math.pow(omega_norm, 2);
+    
+    const term1 = Math.pow(Math.pow(omega_norm, 0.75) + 0.5, 3.7);
+    
+    const term2 = Math.pow((1.1 * Math.pow(RT, -0.57)) * omega_norm, 7);
+    
+    const denominator = term1 + term2;
+    
     return numerator / denominator;
 }
 
-function computeSpectrum(U, F1, xc) {
-    const Delta = DeltaFromChord(xc);
-    return omega.map(w => wallPressureSpectrum(w, U, F1, Delta));
+function computeSpectrum(RT) {
+    return omega_delta_Ue.map(w => {
+        const phiValue = wallPressureSpectrum(w, RT);
+        return 10 * Math.log10(phiValue);  // Return 10*log10 for proper dB scale
+    });
 }
 
 /* ------------------------------------------------------
@@ -184,9 +159,9 @@ const ctx = document.getElementById('spectrumChart').getContext('2d');
 const spectrumChart = new Chart(ctx, {
     type: 'line',
     data: {
-        labels: freq,  // Use frequency (Hz) for x-axis labels
+        labels: omega_delta_Ue,
         datasets: [{
-            data: computeSpectrum(30, 1.0, 1.0),
+            data: computeSpectrum(100),
             borderColor: '#0055aa',
             borderWidth: 2,
             pointRadius: 0
@@ -198,16 +173,28 @@ const spectrumChart = new Chart(ctx, {
         scales: {
             x: { 
                 type: 'logarithmic', 
-                min: 1,
-                max: 1e5,
-                title: { display: true, text: 'Frequency f [Hz]' }
+                min: 1e-3,
+                max: 1e4,
+                title: { display: true, text: 'ωδ/Uₑ' }
             },
             y: { 
-                type: 'logarithmic', 
-                title: { display: true, text: 'Normalised wall-pressure spectrum Φₚₚ(ω)' }
+                type: 'linear',
+                min: -40,
+                max: 5,
+                title: { display: true, text: '10 Log₁₀ [Φ(ω)Uₑ / τ_w²δ]' }
             }
         },
-        plugins: { legend: { display: false } }
+        plugins: { 
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const log10Val = context.parsed.y;
+                        return `10 Log₁₀(Φ) = ${log10Val.toFixed(2)}`;
+                    }
+                }
+            }
+        }
     }
 });
 
@@ -215,39 +202,30 @@ const spectrumChart = new Chart(ctx, {
    Slider update
 ------------------------------------------------------ */
 function updatePlot() {
-    const U  = +sliderU.value;
-    const F1 = +sliderF1.value;
-    const xc = +sliderXc.value;
+    const RT = +sliderRT.value;
 
-    valU.textContent  = U.toFixed(0);
-    valF1.textContent = F1.toFixed(2);
-    valXc.textContent = xc.toFixed(2);
+    valRT.textContent = RT.toFixed(0);
 
-    spectrumChart.data.datasets[0].data =
-        computeSpectrum(U, F1, xc);
+    spectrumChart.data.datasets[0].data = computeSpectrum(RT);
 
     spectrumChart.update('none');
 }
 
-sliderU.oninput  = updatePlot;
-sliderF1.oninput = updatePlot;
-sliderXc.oninput = updatePlot;
+sliderRT.oninput = updatePlot;
 
 /* ------------------------------------------------------
    Download Φpp
 ------------------------------------------------------ */
 downloadBtn.onclick = () => {
 
-    const U  = +sliderU.value;
-    const F1 = +sliderF1.value;
-    const xc = +sliderXc.value;
+    const RT = +sliderRT.value;
 
-    const phi = computeSpectrum(U, F1, xc);
+    let csv = "omega_delta_Ue,Phi_pp_normalized,10Log10_Phi_pp\n";
 
-    let csv = "omega,Phi_pp\n";
-
-    for (let i = 0; i < omega.length; i++) {
-        csv += `${omega[i]},${phi[i]}\n`;
+    for (let i = 0; i < omega_delta_Ue.length; i++) {
+        const phiValue = wallPressureSpectrum(omega_delta_Ue[i], RT);
+        const log10Value = 10 * Math.log10(phiValue);
+        csv += `${omega_delta_Ue[i]},${phiValue},${log10Value}\n`;
     }
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -255,7 +233,7 @@ downloadBtn.onclick = () => {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Phi_pp_spectrum.csv";
+    a.download = `Phi_pp_spectrum_RT${RT}.csv`;
     a.click();
 
     URL.revokeObjectURL(url);
